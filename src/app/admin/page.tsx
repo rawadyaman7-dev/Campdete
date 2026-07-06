@@ -11,6 +11,13 @@ type Submission = {
   challenge: { title: string; points: number };
 };
 
+const VIDEO_EXTENSIONS = [".mp4", ".mov", ".webm", ".3gp"];
+
+function isVideoUrl(url: string): boolean {
+  const withoutQuery = url.split("?")[0].toLowerCase();
+  return VIDEO_EXTENSIONS.some((ext) => withoutQuery.endsWith(ext));
+}
+
 export default function AdminReviewPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -53,7 +60,11 @@ export default function AdminReviewPage() {
             <p className="mt-1 text-sm font-medium text-zinc-600">
               {s.challenge.title} · {s.challenge.points} pts
             </p>
-            <img src={s.proofPhotoUrl} alt="Proof" className="mt-2 max-h-80 w-full rounded-xl object-cover" />
+            {isVideoUrl(s.proofPhotoUrl) ? (
+              <video src={s.proofPhotoUrl} controls className="mt-2 max-h-80 w-full rounded-xl object-cover" />
+            ) : (
+              <img src={s.proofPhotoUrl} alt="Proof" className="mt-2 max-h-80 w-full rounded-xl object-cover" />
+            )}
             <div className="mt-3 flex gap-2">
               <button
                 onClick={() => review(s.id, "approve")}

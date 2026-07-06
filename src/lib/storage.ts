@@ -13,8 +13,20 @@ const r2 = new S3Client({
 const BUCKET = process.env.R2_BUCKET_NAME!;
 const PUBLIC_URL_BASE = process.env.R2_PUBLIC_URL!; // e.g. https://pub-xxxx.r2.dev or a custom domain
 
+const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/heif": "heif",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/webm": "webm",
+  "video/3gpp": "3gp",
+};
+
 export async function uploadPhoto(file: Buffer, contentType: string, prefix: string): Promise<string> {
-  const ext = contentType === "image/png" ? "png" : "jpg";
+  const ext = EXTENSION_BY_CONTENT_TYPE[contentType] ?? (contentType.startsWith("video/") ? "mp4" : "jpg");
   const key = `${prefix}/${randomUUID()}.${ext}`;
 
   await r2.send(

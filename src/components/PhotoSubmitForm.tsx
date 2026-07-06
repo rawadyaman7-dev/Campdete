@@ -19,14 +19,17 @@ export default function PhotoSubmitForm({
   onDone: (result: { ok: boolean; queued: boolean; message: string }) => void;
 }) {
   const [preview, setPreview] = useState<string | null>(null);
+  const [previewIsVideo, setPreviewIsVideo] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0];
     if (!selected) return;
-    const compressed = await compressImage(selected);
+    const isVideo = selected.type.startsWith("video/");
+    const compressed = isVideo ? selected : await compressImage(selected);
     setFile(compressed);
+    setPreviewIsVideo(isVideo);
     setPreview(URL.createObjectURL(compressed));
   }
 
@@ -66,19 +69,23 @@ export default function PhotoSubmitForm({
   return (
     <div className="flex flex-col gap-3">
       {preview ? (
-        <img src={preview} alt="Preview" className="max-h-64 w-full rounded-xl object-cover" />
+        previewIsVideo ? (
+          <video src={preview} controls className="max-h-64 w-full rounded-xl object-cover" />
+        ) : (
+          <img src={preview} alt="Preview" className="max-h-64 w-full rounded-xl object-cover" />
+        )
       ) : (
         <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 text-zinc-400">
           <span className="text-4xl">📷</span>
-          <span className="text-sm font-medium">Tap to take or choose a photo</span>
-          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+          <span className="text-sm font-medium">Tap to take a photo/video or choose from gallery</span>
+          <input type="file" accept="image/*,video/*" className="hidden" onChange={handleFile} />
         </label>
       )}
 
       {preview && (
         <label className="text-center text-sm font-medium text-emerald-700 underline">
-          Choose a different photo
-          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+          Choose a different photo or video
+          <input type="file" accept="image/*,video/*" className="hidden" onChange={handleFile} />
         </label>
       )}
 
