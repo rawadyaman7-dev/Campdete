@@ -70,6 +70,7 @@ export default function MapView({
   const mapRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const baseLayerRef = useRef<L.Layer | null>(null);
+  const labelLayerRef = useRef<L.Layer | null>(null);
   const initializedForMode = useRef<string | null>(null);
 
   useEffect(() => {
@@ -116,6 +117,10 @@ export default function MapView({
       map.removeLayer(baseLayerRef.current);
       baseLayerRef.current = null;
     }
+    if (labelLayerRef.current) {
+      map.removeLayer(labelLayerRef.current);
+      labelLayerRef.current = null;
+    }
 
     if (settings.mapMode === "STATIC_IMAGE" && settings.staticImageUrl && settings.boundsNorthLat != null) {
       const bounds = L.latLngBounds(
@@ -128,12 +133,26 @@ export default function MapView({
       map.setMaxBounds(bounds.pad(0.2));
       map.fitBounds(bounds);
     } else {
-      const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
-      });
-      tiles.addTo(map);
-      baseLayerRef.current = tiles;
+      // Satellite imagery (Esri World Imagery — free, no API key needed),
+      // with a semi-transparent roads/labels overlay on top so it reads
+      // like Google Maps' satellite/hybrid view.
+      const satellite = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        {
+          maxZoom: 19,
+          attribution: "Tiles &copy; Esri",
+        }
+      );
+      satellite.addTo(map);
+      baseLayerRef.current = satellite;
+
+      const labels = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        { maxZoom: 19, pane: "shadowPane" }
+      );
+      labels.addTo(map);
+      labelLayerRef.current = labels;
+
       map.setMaxBounds(undefined as unknown as L.LatLngBounds);
     }
   }, [settings.mapMode, settings.staticImageUrl, settings.boundsNorthLat, settings.boundsSouthLat, settings.boundsEastLng, settings.boundsWestLng]);
