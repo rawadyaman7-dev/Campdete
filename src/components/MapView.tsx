@@ -177,7 +177,7 @@ export default function MapView({
   }, [settings.mapMode, settings.staticImageUrl, settings.boundsNorthLat, settings.boundsSouthLat, settings.boundsEastLng, settings.boundsWestLng]);
 
   // Draw team + egg markers, refreshed whenever data changes
-  const fittedOnce = useRef(false);
+  const fittedBoundsRef = useRef<L.LatLngBounds | null>(null);
   useEffect(() => {
     const map = mapRef.current;
     const layerGroup = layerGroupRef.current;
@@ -205,9 +205,19 @@ export default function MapView({
       marker.bindPopup(popupHtml);
     }
 
-    if (!fittedOnce.current && points.length > 0 && settings.mapMode === "LIVE_TILES") {
-      map.fitBounds(L.latLngBounds(points).pad(0.3), { maxZoom: 17 });
-      fittedOnce.current = true;
+    // Re-fit the view whenever a marker shows up outside what we've already
+    // framed — e.g. a team's real GPS location arriving after the initial
+    // egg cluster was framed, possibly far from the camp during testing.
+    // Once everything is in view we leave the map alone so it doesn't jump
+    // around every poll tick while teams wander nearby.
+    if (points.length > 0 && settings.mapMode === "LIVE_TILES") {
+      const newBounds = L.latLngBounds(points);
+      const alreadyFramed = fittedBoundsRef.current?.contains(newBounds) ?? false;
+      if (!alreadyFramed) {
+        const padded = newBounds.pad(0.3);
+        map.fitBounds(padded, { maxZoom: 17 });
+        fittedBoundsRef.current = padded;
+      }
     }
   }, [teams, eggs, settings.mapMode]);
 
