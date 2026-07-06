@@ -1,0 +1,101 @@
+// Prisma schema for the Scout Camp Egg Hunt game.
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SubmissionStatus {
+  pending
+  approved
+  rejected
+}
+
+enum ChallengeStatus {
+  open
+  collected
+}
+
+model Team {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  pin            String
+  color          String
+  currentLat     Float?
+  currentLng     Float?
+  lastSeenAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  submissions    Submission[]
+  eggClaims      EggClaim[]
+
+  @@map("teams")
+}
+
+model Challenge {
+  id               String          @id @default(cuid())
+  title            String
+  description      String
+  points           Int
+  eggLat           Float
+  eggLng           Float
+  eggHintPhotoUrl  String?
+  status           ChallengeStatus @default(open)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  submissions      Submission[]
+  eggClaims        EggClaim[]
+
+  @@map("challenges")
+}
+
+model Submission {
+  id             String            @id @default(cuid())
+  challengeId    String
+  teamId         String
+  proofPhotoUrl  String
+  status         SubmissionStatus  @default(pending)
+  submittedAt    DateTime          @default(now())
+  reviewedAt     DateTime?
+
+  challenge      Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  team           Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("submissions")
+}
+
+model EggClaim {
+  id                String    @id @default(cuid())
+  challengeId       String
+  teamId            String
+  claimLat          Float?
+  claimLng          Float?
+  withinRange       Boolean   @default(false)
+  claimedAt         DateTime  @default(now())
+  confirmedByAdmin  Boolean   @default(false)
+  confirmedAt       DateTime?
+  denied            Boolean   @default(false)
+
+  challenge         Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  team              Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("egg_claims")
+}
+
+model Settings {
+  id               Int      @id @default(1)
+  mapMode          String   @default("LIVE_TILES")
+  staticImageUrl   String?
+  boundsNorthLat   Float?
+  boundsSouthLat   Float?
+  boundsEastLng    Float?
+  boundsWestLng    Float?
+
+  @@map("settings")
+}
