@@ -133,25 +133,44 @@ export default function MapView({
       map.setMaxBounds(bounds.pad(0.2));
       map.fitBounds(bounds);
     } else {
-      // Satellite imagery (Esri World Imagery — free, no API key needed),
-      // with a semi-transparent roads/labels overlay on top so it reads
-      // like Google Maps' satellite/hybrid view.
-      const satellite = L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        {
-          maxZoom: 19,
-          attribution: "Tiles &copy; Esri",
-        }
-      );
-      satellite.addTo(map);
-      baseLayerRef.current = satellite;
+      const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
-      const labels = L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-        { maxZoom: 19, pane: "shadowPane" }
-      );
-      labels.addTo(map);
-      labelLayerRef.current = labels;
+      if (mapboxToken) {
+        // Mapbox's satellite-streets style: satellite imagery plus roads,
+        // place names, and points of interest baked into one layer — the
+        // closest free match to Google Maps' hybrid view.
+        const mapbox = L.tileLayer(
+          `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`,
+          {
+            maxZoom: 22,
+            tileSize: 512,
+            zoomOffset: -1,
+            attribution: "&copy; Mapbox &copy; OpenStreetMap",
+          }
+        );
+        mapbox.addTo(map);
+        baseLayerRef.current = mapbox;
+      } else {
+        // Fallback while no Mapbox token is configured: satellite imagery
+        // (Esri World Imagery — free, no API key needed) with a roads/
+        // boundaries overlay on top.
+        const satellite = L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          {
+            maxZoom: 19,
+            attribution: "Tiles &copy; Esri",
+          }
+        );
+        satellite.addTo(map);
+        baseLayerRef.current = satellite;
+
+        const labels = L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+          { maxZoom: 19, pane: "shadowPane" }
+        );
+        labels.addTo(map);
+        labelLayerRef.current = labels;
+      }
 
       map.setMaxBounds(undefined as unknown as L.LatLngBounds);
     }
