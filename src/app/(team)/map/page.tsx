@@ -18,6 +18,14 @@ type ChallengeResponse = {
   egg: { lat: number; lng: number; hintPhotoUrl: string | null } | null;
 };
 
+type TeamResponse = {
+  id: string;
+  name: string;
+  color: string;
+  currentLat: number | null;
+  currentLng: number | null;
+};
+
 export default function MapPage() {
   const [teams, setTeams] = useState<TeamMarker[]>([]);
   const [eggs, setEggs] = useState<EggMarker[]>([]);
@@ -30,11 +38,19 @@ export default function MapPage() {
     async function poll() {
       try {
         const [teamsRes, challengesRes] = await Promise.all([
-          apiGet<{ teams: TeamMarker[] }>("/api/teams"),
+          apiGet<{ teams: TeamResponse[] }>("/api/teams"),
           apiGet<{ challenges: ChallengeResponse[] }>("/api/challenges"),
         ]);
         if (cancelled) return;
-        setTeams(teamsRes.teams);
+        setTeams(
+          teamsRes.teams.map((t) => ({
+            id: t.id,
+            name: t.name,
+            color: t.color,
+            lat: t.currentLat,
+            lng: t.currentLng,
+          }))
+        );
         setEggs(
           challengesRes.challenges
             .filter((c) => c.status === "racing" && c.egg)
