@@ -5,7 +5,7 @@ import { apiGet, apiPostJson } from "@/lib/apiClient";
 
 type Submission = {
   id: string;
-  proofPhotoUrl: string;
+  proofPhotoUrls: string[];
   submittedAt: string;
   team: { name: string; color: string };
   challenge: { title: string; points: number };
@@ -60,11 +60,15 @@ export default function AdminReviewPage() {
             <p className="mt-1 text-sm font-medium text-zinc-600">
               {s.challenge.title} · {s.challenge.points} pts
             </p>
-            {isVideoUrl(s.proofPhotoUrl) ? (
-              <video src={s.proofPhotoUrl} controls className="mt-2 max-h-80 w-full rounded-xl object-cover" />
-            ) : (
-              <img src={s.proofPhotoUrl} alt="Proof" className="mt-2 max-h-80 w-full rounded-xl object-cover" />
-            )}
+            <div className={`mt-2 grid gap-2 ${s.proofPhotoUrls.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+              {s.proofPhotoUrls.map((url) =>
+                isVideoUrl(url) ? (
+                  <video key={url} src={url} controls className="max-h-80 w-full rounded-xl object-cover" />
+                ) : (
+                  <img key={url} src={url} alt="Proof" className="max-h-80 w-full rounded-xl object-cover" />
+                )
+              )}
+            </div>
             <div className="mt-3 flex gap-2">
               <button
                 onClick={() => review(s.id, "approve")}

@@ -67,7 +67,7 @@ model Submission {
   id             String            @id @default(cuid())
   challengeId    String
   teamId         String
-  proofPhotoUrl  String
+  proofPhotoUrls String[]
   status         SubmissionStatus  @default(pending)
   submittedAt    DateTime          @default(now())
   reviewedAt     DateTime?

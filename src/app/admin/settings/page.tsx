@@ -23,6 +23,8 @@ export default function AdminSettingsPage() {
   const [image, setImage] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   useEffect(() => {
     apiGet<{ settings: Settings }>("/api/settings").then((res) => {
@@ -62,6 +64,32 @@ export default function AdminSettingsPage() {
       setMessage("Couldn't save settings — check your connection and try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function resetGame() {
+    const sure = confirm(
+      "Reset the ENTIRE game? This wipes every team's distance walked, submissions, egg claims, and scores, and reopens all eggs. Team names/PINs and the challenge list stay as-is. This can't be undone."
+    );
+    if (!sure) return;
+    const sureAgain = confirm("Really sure? Type OK again to confirm the full reset.");
+    if (!sureAgain) return;
+
+    const session = getSession();
+    if (!session) return;
+    setResetting(true);
+    setResetMessage(null);
+    try {
+      const res = await fetch("/api/admin/reset", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      if (!res.ok) throw new Error("Reset failed");
+      setResetMessage("Everything's been reset. The game is ready for a fresh start.");
+    } catch {
+      setResetMessage("Couldn't reset — check your connection and try again.");
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -142,6 +170,23 @@ export default function AdminSettingsPage() {
           {saving ? "Saving..." : "Save settings"}
         </button>
         {message && <p className="text-sm font-medium text-zinc-600">{message}</p>}
+      </div>
+
+      <h2 className="mb-2 mt-6 text-lg font-bold text-red-700">Danger zone</h2>
+      <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+        <p className="text-sm text-red-800">
+          Wipe all game progress — distance walked, photo submissions, egg claims, and scores — and reopen every egg.
+          Team names/PINs and your challenge list are kept. Use this once you're done testing and ready to hand the
+          game to the real patrols.
+        </p>
+        <button
+          onClick={resetGame}
+          disabled={resetting}
+          className="h-12 rounded-xl bg-red-600 font-bold text-white active:bg-red-700 disabled:opacity-50"
+        >
+          {resetting ? "Resetting..." : "Reset everything to zero"}
+        </button>
+        {resetMessage && <p className="text-sm font-medium text-red-800">{resetMessage}</p>}
       </div>
     </div>
   );

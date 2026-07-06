@@ -26,17 +26,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const formData = await req.formData();
-  const photo = formData.get("photo") as File | null;
+  const photos = formData.getAll("photo").filter((f): f is File => f instanceof File && f.size > 0);
 
-  if (!photo || photo.size === 0) {
-    return NextResponse.json({ error: "Proof photo is required" }, { status: 400 });
+  if (photos.length === 0) {
+    return NextResponse.json({ error: "At least one proof photo or video is required" }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await photo.arrayBuffer());
-  const proofPhotoUrl = await uploadPhoto(buffer, photo.type, "submissions");
+  const proofPhotoUrls = await Promise.all(
+    photos.map(async (photo) => {
+      const buffer = Buffer.from(await photo.arrayBuffer());
+      return uploadPhoto(buffer, photo.type, "submissions");
+    })
+  );
 
   const submission = await prisma.submission.create({
-    data: { challengeId, teamId: team.teamId, proofPhotoUrl },
+    data: { challengeId, teamId: team.teamId, proofPhotoUrls },
   });
 
   return NextResponse.json({ submission });

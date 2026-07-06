@@ -10,7 +10,7 @@ type QueuedRequest = {
   jsonBody?: unknown;
   fields?: Record<string, string>;
   fileField?: string;
-  file?: Blob;
+  files?: Blob[];
 };
 
 const QUEUE_EVENT = "egg-hunt-queue-changed";
@@ -40,7 +40,9 @@ function buildInit(item: Omit<QueuedRequest, "id" | "createdAt">): RequestInit {
 
   const formData = new FormData();
   for (const [key, value] of Object.entries(item.fields ?? {})) formData.append(key, value);
-  if (item.file && item.fileField) formData.append(item.fileField, item.file);
+  if (item.files && item.fileField) {
+    for (const file of item.files) formData.append(item.fileField, file);
+  }
   return { method: item.method, headers, body: formData };
 }
 

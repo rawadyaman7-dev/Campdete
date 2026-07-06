@@ -26,7 +26,7 @@ async function autoUnlockDistanceChallenges(teamId: string) {
     data: toUnlock.map((c) => ({
       challengeId: c.id,
       teamId,
-      proofPhotoUrl: AUTO_UNLOCK_MARKER,
+      proofPhotoUrls: [AUTO_UNLOCK_MARKER],
       status: "approved" as const,
       reviewedAt: new Date(),
     })),
