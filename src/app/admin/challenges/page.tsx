@@ -118,6 +118,7 @@ export default function AdminChallengesPage() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function load() {
     const res = await apiGet<{ challenges: Challenge[] }>("/api/challenges");
@@ -150,6 +151,24 @@ export default function AdminChallengesPage() {
     });
     setEditingId(null);
     load();
+  }
+
+  async function deleteChallenge(id: string, title: string) {
+    if (!confirm(`Delete "${title}"? This also removes any submissions and egg claims for it. This can't be undone.`)) {
+      return;
+    }
+    const session = getSession();
+    if (!session) return;
+    setDeletingId(id);
+    try {
+      await fetch(`/api/challenges/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      load();
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -203,12 +222,21 @@ export default function AdminChallengesPage() {
                     ? `Collected by ${c.collectedBy.teamName}`
                     : "Open"}
                 </p>
-                <button
-                  onClick={() => setEditingId(c.id)}
-                  className="mt-2 rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700"
-                >
-                  Edit
-                </button>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => setEditingId(c.id)}
+                    className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => deleteChallenge(c.id, c.title)}
+                    disabled={deletingId === c.id}
+                    className="rounded-full bg-red-50 px-3 py-1 text-sm font-medium text-red-600 disabled:opacity-50"
+                  >
+                    {deletingId === c.id ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
               </>
             )}
           </div>

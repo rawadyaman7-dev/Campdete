@@ -35,3 +35,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   return NextResponse.json({ challenge });
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = verifyToken(req);
+  if (!auth || auth.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const challenge = await prisma.challenge.findUnique({ where: { id } });
+  if (!challenge) {
+    return NextResponse.json({ error: "Challenge not found" }, { status: 404 });
+  }
+
+  // Cascades to delete this challenge's submissions and egg claims too
+  // (onDelete: Cascade in schema.prisma).
+  await prisma.challenge.delete({ where: { id } });
+
+  return NextResponse.json({ ok: true });
+}

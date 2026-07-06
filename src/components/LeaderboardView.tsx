@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet } from "@/lib/apiClient";
+import { apiGet, apiPostJson } from "@/lib/apiClient";
 
 type LeaderboardEntry = { id: string; name: string; color: string; points: number };
 type HistoryEntry = {
@@ -16,32 +16,43 @@ type HistoryEntry = {
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-export default function LeaderboardView() {
+export default function LeaderboardView({ admin = false }: { admin?: boolean }) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const res = await apiGet<{ leaderboard: LeaderboardEntry[]; history: HistoryEntry[] }>("/api/leaderboard");
+      setLeaderboard(res.leaderboard);
+      setHistory(res.history);
+    } catch {
+      // keep last known data on transient failure
+    }
+  }
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const res = await apiGet<{ leaderboard: LeaderboardEntry[]; history: HistoryEntry[] }>("/api/leaderboard");
-        if (!cancelled) {
-          setLeaderboard(res.leaderboard);
-          setHistory(res.history);
-        }
-      } catch {
-        // keep last known data on transient failure
-      }
-    }
-
     load();
     const interval = setInterval(load, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, []);
+
+  async function revoke(entry: HistoryEntry) {
+    if (
+      !confirm(
+        `Revoke "${entry.challengeTitle}" for ${entry.teamName}? This removes their ${entry.points} points, reopens the egg if they'd already collected it, and lets them resubmit.`
+      )
+    ) {
+      return;
+    }
+    setRevokingId(entry.id);
+    try {
+      await apiPostJson(`/api/submissions/${entry.id}/revoke`, {});
+      await load();
+    } finally {
+      setRevokingId(null);
+    }
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-4">
@@ -69,6 +80,7 @@ export default function LeaderboardView() {
               <th className="p-2">Submitted</th>
               <th className="p-2">Approved</th>
               <th className="p-2">Collected</th>
+              {admin && <th className="p-2" />}
             </tr>
           </thead>
           <tbody>
@@ -80,11 +92,22 @@ export default function LeaderboardView() {
                 <td className="p-2 text-zinc-400">{new Date(h.submittedAt).toLocaleTimeString()}</td>
                 <td className="p-2 text-zinc-400">{h.approvedAt ? new Date(h.approvedAt).toLocaleTimeString() : "—"}</td>
                 <td className="p-2 text-zinc-400">{h.collectedAt ? new Date(h.collectedAt).toLocaleTimeString() : "—"}</td>
+                {admin && (
+                  <td className="p-2">
+                    <button
+                      onClick={() => revoke(h)}
+                      disabled={revokingId === h.id}
+                      className="whitespace-nowrap rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600 disabled:opacity-50"
+                    >
+                      {revokingId === h.id ? "Revoking..." : "Revoke"}
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
             {history.length === 0 && (
               <tr>
-                <td className="p-3 text-zinc-400" colSpan={6}>
+                <td className="p-3 text-zinc-400" colSpan={admin ? 7 : 6}>
                   No approved submissions yet.
                 </td>
               </tr>
