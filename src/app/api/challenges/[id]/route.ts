@@ -18,6 +18,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const eggLatRaw = formData.get("eggLat");
   const eggLngRaw = formData.get("eggLng");
   const hintPhoto = formData.get("hintPhoto") as File | null;
+  const unlockTypeRaw = formData.get("unlockType") as string | null;
+  const requiredDistanceKmRaw = formData.get("requiredDistanceKm");
 
   const data: Record<string, unknown> = {};
   if (title) data.title = title;
@@ -25,6 +27,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (pointsRaw !== null) data.points = Number(pointsRaw);
   if (eggLatRaw !== null) data.eggLat = Number(eggLatRaw);
   if (eggLngRaw !== null) data.eggLng = Number(eggLngRaw);
+
+  if (unlockTypeRaw === "DISTANCE_WALKED" || unlockTypeRaw === "PHOTO_SUBMISSION") {
+    data.unlockType = unlockTypeRaw;
+    if (unlockTypeRaw === "DISTANCE_WALKED") {
+      data.requiredDistanceMeters = requiredDistanceKmRaw ? Math.round(Number(requiredDistanceKmRaw) * 1000) : null;
+    } else {
+      data.requiredDistanceMeters = null;
+    }
+  }
 
   if (hintPhoto && hintPhoto.size > 0) {
     const buffer = Buffer.from(await hintPhoto.arrayBuffer());

@@ -21,15 +21,21 @@ enum ChallengeStatus {
   collected
 }
 
+enum ChallengeUnlockType {
+  PHOTO_SUBMISSION
+  DISTANCE_WALKED
+}
+
 model Team {
-  id             String   @id @default(cuid())
-  name           String   @unique
-  pin            String
-  color          String
-  currentLat     Float?
-  currentLng     Float?
-  lastSeenAt     DateTime?
-  createdAt      DateTime @default(now())
+  id                   String    @id @default(cuid())
+  name                 String    @unique
+  pin                  String
+  color                String
+  currentLat           Float?
+  currentLng           Float?
+  lastSeenAt           DateTime?
+  totalDistanceMeters  Float     @default(0)
+  createdAt            DateTime  @default(now())
 
   submissions    Submission[]
   eggClaims      EggClaim[]
@@ -38,16 +44,18 @@ model Team {
 }
 
 model Challenge {
-  id               String          @id @default(cuid())
-  title            String
-  description      String
-  points           Int
-  eggLat           Float
-  eggLng           Float
-  eggHintPhotoUrl  String?
-  status           ChallengeStatus @default(open)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id                     String              @id @default(cuid())
+  title                  String
+  description            String
+  points                 Int
+  eggLat                 Float
+  eggLng                 Float
+  eggHintPhotoUrl        String?
+  status                 ChallengeStatus     @default(open)
+  unlockType             ChallengeUnlockType @default(PHOTO_SUBMISSION)
+  requiredDistanceMeters Int?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   submissions      Submission[]
   eggClaims        EggClaim[]

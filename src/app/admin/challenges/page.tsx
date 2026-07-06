@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/apiClient";
 import { getSession } from "@/lib/session";
 
+type UnlockType = "PHOTO_SUBMISSION" | "DISTANCE_WALKED";
+
 type Challenge = {
   id: string;
   title: string;
@@ -13,6 +15,8 @@ type Challenge = {
   eggLat: number;
   eggLng: number;
   eggHintPhotoUrl: string | null;
+  unlockType: UnlockType;
+  requiredDistanceMeters: number | null;
   collectedBy: { teamName: string; at: string } | null;
 };
 
@@ -23,9 +27,20 @@ type FormState = {
   eggLat: string;
   eggLng: string;
   hintPhoto: File | null;
+  unlockType: UnlockType;
+  requiredDistanceKm: string;
 };
 
-const EMPTY_FORM: FormState = { title: "", description: "", points: "10", eggLat: "", eggLng: "", hintPhoto: null };
+const EMPTY_FORM: FormState = {
+  title: "",
+  description: "",
+  points: "10",
+  eggLat: "",
+  eggLng: "",
+  hintPhoto: null,
+  unlockType: "PHOTO_SUBMISSION",
+  requiredDistanceKm: "5",
+};
 
 function ChallengeForm({
   initial,
@@ -38,6 +53,14 @@ function ChallengeForm({
 }) {
   const [form, setForm] = useState(initial);
   const [submitting, setSubmitting] = useState(false);
+
+  const isDistanceUnlock = form.unlockType === "DISTANCE_WALKED";
+  const canSubmit =
+    form.title &&
+    form.description &&
+    form.eggLat &&
+    form.eggLng &&
+    (!isDistanceUnlock || (form.requiredDistanceKm && Number(form.requiredDistanceKm) > 0));
 
   return (
     <div className="flex flex-col gap-2">
@@ -75,6 +98,43 @@ function ChallengeForm({
           onChange={(e) => setForm({ ...form, eggLng: e.target.value })}
         />
       </div>
+
+      <div className="rounded-lg border border-zinc-200 p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">How does it unlock?</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, unlockType: "PHOTO_SUBMISSION" })}
+            className={`h-10 flex-1 rounded-lg text-sm font-medium ${
+              !isDistanceUnlock ? "bg-zinc-800 text-white" : "bg-zinc-100 text-zinc-600"
+            }`}
+          >
+            📸 Photo/video proof
+          </button>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, unlockType: "DISTANCE_WALKED" })}
+            className={`h-10 flex-1 rounded-lg text-sm font-medium ${
+              isDistanceUnlock ? "bg-zinc-800 text-white" : "bg-zinc-100 text-zinc-600"
+            }`}
+          >
+            🚶 Walk a distance
+          </button>
+        </div>
+        {isDistanceUnlock && (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              className="h-10 w-24 rounded-lg border border-zinc-300 px-3"
+              placeholder="5"
+              inputMode="decimal"
+              value={form.requiredDistanceKm}
+              onChange={(e) => setForm({ ...form, requiredDistanceKm: e.target.value })}
+            />
+            <span className="text-sm text-zinc-500">km walked by the patrol unlocks this egg automatically</span>
+          </div>
+        )}
+      </div>
+
       <label className="flex h-11 cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 text-sm text-zinc-500">
         {form.hintPhoto ? form.hintPhoto.name : "Upload hint photo (optional)"}
         <input
@@ -94,7 +154,7 @@ function ChallengeForm({
             setSubmitting(false);
           }
         }}
-        disabled={submitting || !form.title || !form.description || !form.eggLat || !form.eggLng}
+        disabled={submitting || !canSubmit}
         className="h-11 rounded-lg bg-zinc-800 font-bold text-white disabled:opacity-40"
       >
         {submitting ? "Saving..." : submitLabel}
@@ -110,6 +170,8 @@ function buildFormData(form: FormState): FormData {
   fd.append("points", form.points);
   fd.append("eggLat", form.eggLat);
   fd.append("eggLng", form.eggLng);
+  fd.append("unlockType", form.unlockType);
+  if (form.unlockType === "DISTANCE_WALKED") fd.append("requiredDistanceKm", form.requiredDistanceKm);
   if (form.hintPhoto) fd.append("hintPhoto", form.hintPhoto);
   return fd;
 }
@@ -201,6 +263,8 @@ export default function AdminChallengesPage() {
                   eggLat: String(c.eggLat),
                   eggLng: String(c.eggLng),
                   hintPhoto: null,
+                  unlockType: c.unlockType,
+                  requiredDistanceKm: c.requiredDistanceMeters ? String(c.requiredDistanceMeters / 1000) : "5",
                 }}
                 onSubmit={(form) => updateChallenge(c.id, form)}
                 submitLabel="Save changes"
@@ -216,6 +280,11 @@ export default function AdminChallengesPage() {
                 <p className="mt-1 text-sm text-zinc-500">{c.description}</p>
                 <p className="mt-1 text-xs text-zinc-400">
                   Egg at {c.eggLat.toFixed(5)}, {c.eggLng.toFixed(5)}
+                </p>
+                <p className="mt-1 text-xs font-medium text-zinc-500">
+                  {c.unlockType === "DISTANCE_WALKED"
+                    ? `🚶 Unlocks after walking ${((c.requiredDistanceMeters ?? 0) / 1000).toFixed(1)} km`
+                    : "📸 Unlocks via photo/video proof"}
                 </p>
                 <p className="mt-1 text-sm font-semibold">
                   {c.status === "collected" && c.collectedBy

@@ -13,6 +13,8 @@ type Challenge = {
   description: string;
   points: number;
   status: "open" | "pending" | "racing" | "rejected" | "collected";
+  unlockType: "PHOTO_SUBMISSION" | "DISTANCE_WALKED";
+  distanceProgress: { walkedMeters: number; requiredMeters: number } | null;
   collectedBy: { teamName: string; at: string } | null;
   egg: { lat: number; lng: number; hintPhotoUrl: string | null } | null;
   myClaimPending: boolean;
@@ -100,7 +102,33 @@ export default function ChallengeDetailPage({ params }: { params: Promise<{ id: 
           </p>
         )}
 
-        {(challenge.status === "open" || challenge.status === "rejected") && (
+        {challenge.status === "open" && challenge.unlockType === "DISTANCE_WALKED" && challenge.distanceProgress && (
+          <div className="flex flex-col gap-2">
+            <p className="font-medium text-zinc-700">
+              🚶 Walk {(challenge.distanceProgress.requiredMeters / 1000).toFixed(1)} km as a patrol to unlock this egg.
+            </p>
+            <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100">
+              <div
+                className="h-full rounded-full bg-emerald-600 transition-all"
+                style={{
+                  width: `${Math.min(100, (challenge.distanceProgress.walkedMeters / challenge.distanceProgress.requiredMeters) * 100)}%`,
+                }}
+              />
+            </div>
+            <p className="text-sm text-zinc-500">
+              {(challenge.distanceProgress.walkedMeters / 1000).toFixed(2)} / {(challenge.distanceProgress.requiredMeters / 1000).toFixed(1)} km walked
+              so far. Keep the Map tab open while you hike — that's what tracks your distance!
+            </p>
+          </div>
+        )}
+
+        {challenge.status === "rejected" && challenge.unlockType === "DISTANCE_WALKED" && (
+          <p className="font-medium text-amber-700">
+            This challenge was reset by the camp admin. Check with them if you think that&apos;s a mistake.
+          </p>
+        )}
+
+        {(challenge.status === "open" || challenge.status === "rejected") && challenge.unlockType === "PHOTO_SUBMISSION" && (
           <>
             {challenge.status === "rejected" && (
               <p className="mb-3 font-medium text-red-600">Your last submission was rejected — try again with a clearer photo.</p>

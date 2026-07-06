@@ -10,6 +10,8 @@ type Challenge = {
   description: string;
   points: number;
   status: "open" | "pending" | "racing" | "rejected" | "collected";
+  unlockType: "PHOTO_SUBMISSION" | "DISTANCE_WALKED";
+  distanceProgress: { walkedMeters: number; requiredMeters: number } | null;
   collectedBy: { teamName: string; at: string } | null;
   myClaimPending: boolean;
 };
@@ -81,6 +83,10 @@ export default function ChallengesPage() {
                 ? `Collected by ${c.collectedBy.teamName}`
                 : c.status === "racing" && c.myClaimPending
                 ? "Claim submitted — awaiting confirmation"
+                : c.status === "open" && c.unlockType === "DISTANCE_WALKED" && c.distanceProgress
+                ? `🚶 ${(c.distanceProgress.walkedMeters / 1000).toFixed(2)} / ${(c.distanceProgress.requiredMeters / 1000).toFixed(1)} km walked`
+                : c.status === "rejected" && c.unlockType === "DISTANCE_WALKED"
+                ? "Reset by admin"
                 : STATUS_LABEL[c.status]}
             </span>
           </Link>
