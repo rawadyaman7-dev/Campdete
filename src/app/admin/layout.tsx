@@ -7,6 +7,7 @@ import { clearSession } from "@/lib/session";
 
 const NAV = [
   { href: "/admin", label: "Review" },
+  { href: "/admin/map", label: "Map" },
   { href: "/admin/claims", label: "Egg Claims" },
   { href: "/admin/challenges", label: "Challenges" },
   { href: "/admin/leaderboard", label: "Leaderboard" },

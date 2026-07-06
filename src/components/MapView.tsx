@@ -17,7 +17,16 @@ export type EggMarker = {
   lat: number;
   lng: number;
   hintPhotoUrl: string | null;
+  collected?: boolean;
+  collectedBy?: string | null;
 };
+
+// Fallback view centered on the camp (Qornayel, Lebanon) so the map always
+// opens showing the hunt area instead of a blank world view when there are
+// no markers to fit bounds to yet (e.g. before any team has shared GPS or
+// unlocked an egg).
+const CAMP_CENTER: [number, number] = [33.7975, 35.7638];
+const CAMP_DEFAULT_ZOOM = 16;
 
 export type MapSettings = {
   mapMode: "LIVE_TILES" | "STATIC_IMAGE";
@@ -39,10 +48,10 @@ function teamDivIcon(color: string, name: string) {
   });
 }
 
-function eggDivIcon() {
+function eggDivIcon(collected: boolean) {
   return L.divIcon({
     className: "",
-    html: `<div style="font-size:28px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))">🥚</div>`,
+    html: `<div style="font-size:28px;opacity:${collected ? 0.4 : 1};filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))">${collected ? "✅" : "🥚"}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
   });
@@ -69,12 +78,26 @@ export default function MapView({
     const map = L.map(containerRef.current, {
       zoomControl: true,
       attributionControl: false,
-    }).setView([0, 0], 2);
+    }).setView(CAMP_CENTER, CAMP_DEFAULT_ZOOM);
 
     mapRef.current = map;
     layerGroupRef.current = L.layerGroup().addTo(map);
 
+    // Defensive: if the container's size isn't settled yet on first paint
+    // (e.g. fonts/layout still shifting), Leaflet can lock in a 0x0 tile
+    // grid. Re-measure shortly after mount and on any resize.
+    const invalidate = () => map.invalidateSize();
+    const raf = requestAnimationFrame(invalidate);
+    const timeout = setTimeout(invalidate, 300);
+    const resizeObserver = new ResizeObserver(invalidate);
+    resizeObserver.observe(containerRef.current);
+    window.addEventListener("resize", invalidate);
+
     return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timeout);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", invalidate);
       map.remove();
       mapRef.current = null;
     };
@@ -134,10 +157,11 @@ export default function MapView({
 
     for (const egg of eggs) {
       points.push([egg.lat, egg.lng]);
-      const marker = L.marker([egg.lat, egg.lng], { icon: eggDivIcon() }).addTo(layerGroup);
+      const marker = L.marker([egg.lat, egg.lng], { icon: eggDivIcon(!!egg.collected) }).addTo(layerGroup);
       const popupHtml = `
         <div style="max-width:200px">
           <strong>${egg.title}</strong>
+          ${egg.collected ? `<div style="margin-top:2px;color:#16a34a;font-weight:600;font-size:12px">Collected${egg.collectedBy ? ` by ${egg.collectedBy}` : ""}</div>` : ""}
           ${egg.hintPhotoUrl ? `<img src="${egg.hintPhotoUrl}" style="width:100%;border-radius:8px;margin-top:6px" />` : ""}
         </div>`;
       marker.bindPopup(popupHtml);
