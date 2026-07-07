@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
+import { distanceMeters, bearingDegrees, compassDirection } from "@/lib/geo";
 
 export type TeamMarker = {
   id: string;
@@ -57,21 +58,198 @@ function eggDivIcon(collected: boolean) {
   });
 }
 
+type DirectionsState = {
+  eggId: string;
+  eggTitle: string;
+  loading: boolean;
+  error: string | null;
+  isFallback: boolean;
+  compassText?: string;
+  distanceText: string;
+  durationText: string | null;
+  steps: { instruction: string; distanceText: string }[];
+};
+
+function formatDistance(m: number): string {
+  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
+}
+
+function formatDuration(s: number): string {
+  const mins = Math.round(s / 60);
+  return mins < 1 ? "under a minute" : `${mins} min`;
+}
+
+async function fetchWalkingRoute(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+  token: string
+): Promise<{
+  coords: [number, number][];
+  distanceMeters: number;
+  durationSeconds: number;
+  steps: { instruction: string; distanceMeters: number }[];
+} | null> {
+  const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${from.lng},${from.lat};${to.lng},${to.lat}?geometries=geojson&steps=true&overview=full&access_token=${token}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const route = data.routes?.[0];
+  if (!route) return null;
+  const steps = (route.legs?.[0]?.steps ?? []).map(
+    (s: { maneuver?: { instruction?: string }; distance?: number }) => ({
+      instruction: s.maneuver?.instruction ?? "Continue",
+      distanceMeters: s.distance ?? 0,
+    })
+  );
+  return {
+    coords: route.geometry.coordinates as [number, number][],
+    distanceMeters: route.distance,
+    durationSeconds: route.duration,
+    steps,
+  };
+}
+
 export default function MapView({
   teams,
   eggs,
   settings,
+  myLocation,
+  enableDirections,
 }: {
   teams: TeamMarker[];
   eggs: EggMarker[];
   settings: MapSettings;
+  myLocation?: { lat: number; lng: number } | null;
+  enableDirections?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const baseLayerRef = useRef<L.Layer | null>(null);
   const labelLayerRef = useRef<L.Layer | null>(null);
   const initializedForMode = useRef<string | null>(null);
+  const eggsRef = useRef<EggMarker[]>(eggs);
+  const myLocationRef = useRef(myLocation);
+  const [directions, setDirections] = useState<DirectionsState | null>(null);
+
+  eggsRef.current = eggs;
+  myLocationRef.current = myLocation;
+
+  async function requestDirections(eggId: string) {
+    const map = mapRef.current;
+    const routeLayer = routeLayerRef.current;
+    const egg = eggsRef.current.find((e) => e.id === eggId);
+    const loc = myLocationRef.current;
+    if (!map || !routeLayer || !egg) return;
+
+    routeLayer.clearLayers();
+
+    if (!loc) {
+      setDirections({
+        eggId,
+        eggTitle: egg.title,
+        loading: false,
+        error: "Still waiting for your GPS location — step somewhere with a clear sky view and tap Directions again.",
+        isFallback: false,
+        distanceText: "",
+        durationText: null,
+        steps: [],
+      });
+      return;
+    }
+
+    setDirections({
+      eggId,
+      eggTitle: egg.title,
+      loading: true,
+      error: null,
+      isFallback: false,
+      distanceText: "",
+      durationText: null,
+      steps: [],
+    });
+
+    const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    let route = null;
+    if (mapboxToken) {
+      try {
+        route = await fetchWalkingRoute(loc, { lat: egg.lat, lng: egg.lng }, mapboxToken);
+      } catch {
+        route = null;
+      }
+    }
+
+    // Bail if the map was unmounted while the request was in flight.
+    if (!mapRef.current || !routeLayerRef.current) return;
+
+    if (route) {
+      const latlngs = route.coords.map(([lng, lat]) => [lat, lng] as [number, number]);
+      const line = L.polyline(latlngs, { color: "#2563eb", weight: 5, opacity: 0.85 });
+      line.addTo(routeLayerRef.current);
+      L.circleMarker([loc.lat, loc.lng], {
+        radius: 7,
+        color: "#2563eb",
+        fillColor: "#2563eb",
+        fillOpacity: 1,
+        weight: 2,
+      }).addTo(routeLayerRef.current);
+      map.fitBounds(line.getBounds().pad(0.25), { maxZoom: 18 });
+
+      setDirections({
+        eggId,
+        eggTitle: egg.title,
+        loading: false,
+        error: null,
+        isFallback: false,
+        distanceText: formatDistance(route.distanceMeters),
+        durationText: formatDuration(route.durationSeconds),
+        steps: route.steps.map((s) => ({ instruction: s.instruction, distanceText: formatDistance(s.distanceMeters) })),
+      });
+    } else {
+      // No mapped walking path found (common in open camp terrain) — fall
+      // back to a straight dashed line plus a compass bearing and distance.
+      const straight = L.polyline(
+        [
+          [loc.lat, loc.lng],
+          [egg.lat, egg.lng],
+        ],
+        { color: "#2563eb", weight: 4, opacity: 0.8, dashArray: "8 8" }
+      );
+      straight.addTo(routeLayerRef.current);
+      L.circleMarker([loc.lat, loc.lng], {
+        radius: 7,
+        color: "#2563eb",
+        fillColor: "#2563eb",
+        fillOpacity: 1,
+        weight: 2,
+      }).addTo(routeLayerRef.current);
+      map.fitBounds(straight.getBounds().pad(0.25), { maxZoom: 18 });
+
+      const dist = distanceMeters(loc.lat, loc.lng, egg.lat, egg.lng);
+      const bearing = bearingDegrees(loc.lat, loc.lng, egg.lat, egg.lng);
+
+      setDirections({
+        eggId,
+        eggTitle: egg.title,
+        loading: false,
+        error: null,
+        isFallback: true,
+        compassText: `Head ${compassDirection(bearing)}`,
+        distanceText: formatDistance(dist),
+        durationText: null,
+        steps: [],
+      });
+    }
+  }
+
+  function closeDirections() {
+    routeLayerRef.current?.clearLayers();
+    setDirections(null);
+  }
+
+  const requestDirectionsRef = useRef(requestDirections);
+  requestDirectionsRef.current = requestDirections;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -83,6 +261,19 @@ export default function MapView({
 
     mapRef.current = map;
     layerGroupRef.current = L.layerGroup().addTo(map);
+    routeLayerRef.current = L.layerGroup().addTo(map);
+
+    const onPopupOpen = (e: L.PopupEvent) => {
+      const el = e.popup.getElement();
+      const btn = el?.querySelector<HTMLButtonElement>("[data-directions-egg]");
+      if (btn) {
+        btn.addEventListener("click", () => {
+          const eggId = btn.getAttribute("data-directions-egg");
+          if (eggId) requestDirectionsRef.current(eggId);
+        });
+      }
+    };
+    map.on("popupopen", onPopupOpen);
 
     // Defensive: if the container's size isn't settled yet on first paint
     // (e.g. fonts/layout still shifting), Leaflet can lock in a 0x0 tile
@@ -101,6 +292,8 @@ export default function MapView({
       window.removeEventListener("resize", invalidate);
       map.remove();
       mapRef.current = null;
+      layerGroupRef.current = null;
+      routeLayerRef.current = null;
     };
   }, []);
 
@@ -201,6 +394,11 @@ export default function MapView({
           <strong>${egg.title}</strong>
           ${egg.collected ? `<div style="margin-top:2px;color:#16a34a;font-weight:600;font-size:12px">Collected${egg.collectedBy ? ` by ${egg.collectedBy}` : ""}</div>` : ""}
           ${egg.hintPhotoUrl ? `<img src="${egg.hintPhotoUrl}" style="width:100%;border-radius:8px;margin-top:6px" />` : ""}
+          ${
+            enableDirections && !egg.collected
+              ? `<button data-directions-egg="${egg.id}" style="margin-top:8px;width:100%;background:#2563eb;color:white;border:none;border-radius:8px;padding:7px 0;font-size:13px;font-weight:700">🧭 Directions</button>`
+              : ""
+          }
         </div>`;
       marker.bindPopup(popupHtml);
     }
@@ -221,5 +419,58 @@ export default function MapView({
     }
   }, [teams, eggs, settings.mapMode]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full" />
+
+      {directions && (
+        <div className="absolute inset-x-2 bottom-2 z-[1000] max-h-[45%] overflow-y-auto rounded-2xl bg-white p-3 shadow-lg">
+          <div className="mb-1 flex items-start justify-between gap-2">
+            <p className="text-sm font-bold text-zinc-800">🧭 {directions.eggTitle}</p>
+            <button
+              onClick={closeDirections}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold text-zinc-600"
+              aria-label="Close directions"
+            >
+              ✕
+            </button>
+          </div>
+
+          {directions.loading && <p className="text-sm text-zinc-500">Finding the best walking route...</p>}
+
+          {directions.error && <p className="text-sm font-medium text-amber-700">{directions.error}</p>}
+
+          {!directions.loading && !directions.error && (
+            <>
+              <p className="mb-2 text-xs font-semibold text-zinc-500">
+                {directions.compassText ? `${directions.compassText} · ` : ""}
+                {directions.distanceText}
+                {directions.durationText ? ` · about ${directions.durationText} walking` : ""}
+              </p>
+
+              {directions.isFallback && (
+                <p className="mb-2 text-xs text-amber-700">
+                  No mapped path found nearby — follow the dashed line and compass heading above as your guide.
+                </p>
+              )}
+
+              {directions.steps.length > 0 && (
+                <ol className="flex flex-col gap-1.5">
+                  {directions.steps.map((step, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-zinc-700">
+                      <span className="font-bold text-blue-600">{i + 1}.</span>
+                      <span>
+                        {step.instruction}
+                        <span className="text-zinc-400"> — {step.distanceText}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

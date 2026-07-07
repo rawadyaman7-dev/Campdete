@@ -31,6 +31,7 @@ export default function MapPage() {
   const [eggs, setEggs] = useState<EggMarker[]>([]);
   const [settings, setSettings] = useState<MapSettings>({ mapMode: "LIVE_TILES" });
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +92,7 @@ export default function MapPage() {
         async (pos) => {
           if (cancelled) return;
           setLocationError(null);
+          setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
           await submitWithRetry({
             url: `/api/teams/${teamId}/location`,
             method: "POST",
@@ -119,7 +121,7 @@ export default function MapPage() {
           {locationError}
         </div>
       )}
-      <MapView teams={teams} eggs={eggs} settings={settings} />
+      <MapView teams={teams} eggs={eggs} settings={settings} myLocation={myLocation} enableDirections />
     </div>
   );
 }
