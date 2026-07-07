@@ -140,24 +140,9 @@ export default function MapView({
     const map = mapRef.current;
     const routeLayer = routeLayerRef.current;
     const egg = eggsRef.current.find((e) => e.id === eggId);
-    const loc = myLocationRef.current;
     if (!map || !routeLayer || !egg) return;
 
     routeLayer.clearLayers();
-
-    if (!loc) {
-      setDirections({
-        eggId,
-        eggTitle: egg.title,
-        loading: false,
-        error: "Still waiting for your GPS location — step somewhere with a clear sky view and tap Directions again.",
-        isFallback: false,
-        distanceText: "",
-        durationText: null,
-        steps: [],
-      });
-      return;
-    }
 
     setDirections({
       eggId,
@@ -169,6 +154,40 @@ export default function MapView({
       durationText: null,
       steps: [],
     });
+
+    // Don't just rely on the location the page happened to have cached from
+    // its periodic background poll — actively ask the device for a fresh
+    // fix right now, in direct response to the tap. This is both faster
+    // (no waiting for the next poll tick) and more reliable, since a fresh
+    // on-demand request also re-prompts for permission if it was never
+    // granted, instead of silently sitting on a stale/empty value forever.
+    let loc = myLocationRef.current;
+    if (!loc && "geolocation" in navigator) {
+      loc = await new Promise<{ lat: number; lng: number } | null>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 }
+        );
+      });
+    }
+
+    if (!mapRef.current || !routeLayerRef.current) return;
+
+    if (!loc) {
+      setDirections({
+        eggId,
+        eggTitle: egg.title,
+        loading: false,
+        error:
+          "Couldn't get your location. Make sure location access is allowed for this site (check your browser/phone settings), then tap Directions again.",
+        isFallback: false,
+        distanceText: "",
+        durationText: null,
+        steps: [],
+      });
+      return;
+    }
 
     const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
     let route = null;
